@@ -1,0 +1,533 @@
+---
+title: "Examen onderzoekstechnieken"
+author: "Indy Van Canegem"
+date: "4 juni 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##LIBRARIES + INLADEN FILES RUN DIT EERST!
+```{r}
+library(TTR)
+library(forecast)
+library(ggplot2)
+library(DAAG)
+library(lattice)
+library(tools)
+library(readxl)
+library(foreign)
+library(lsr)
+library(tools)
+
+
+#absoluut pad zetten naar de gegevenbestanden
+setwd("C:/Users/IndyV/OneDrive/HoGent/2e Jaar Toegepaste Informatica/Onderzoekstechnieken/onderzoekstechnieken-cursus/oefeningen/data/hfst8_tijdsreeksen")
+
+#laden van files.
+load_file <- function(path) {
+  type <- file_ext(path)
+  if (type == "xlsx") {
+    return(read_excel(path))
+  } else if (type == "sav") {
+    return(read.spss(path, to.data.frame=TRUE))
+  } else if (type == "csv") {
+    return(read.csv(path))
+  } else if (type == "txt") {
+    return(read.delim(path))
+  }
+}
+
+help(file_ext)
+#variabelen setten voor voorbeelden 
+passagiers<-read.csv("Passagiers2.csv")
+android<-load_file("C:/Users/IndyV/OneDrive/HoGent/2e Jaar Toegepaste Informatica/Onderzoekstechnieken/onderzoekstechnieken-cursus/oefeningen/data/hfst3_1variabele/android_persistence_cpu.xlsx")
+
+```
+##NA's uit data halen:
+```{r}
+pizza<-load_file("C:/Users/IndyV/OneDrive/HoGent/2e Jaar Toegepaste Informatica/Onderzoekstechnieken/onderzoekstechnieken-cursus/oefeningen/data/hfst6_2variabelen/Pizza.csv")
+X<-pizza$CostPerSlice[!is.na(pizza$CostPerSlice)]
+```
+##Hoofdstuk 3: Analyse op 1 variabele
+
+Quartielen, min, max gemiddelde en mediaan geven:
+```{r}
+summary(passagiers)
+```
+
+Frequenties a.d.h.v histogram + overlay van een normale verdeling:
+```{r}
+hist(android$Tijd, main = "Verdeling van de tijd",xlab = "De gemeten cpu tijd")
+#Nu een histogram met een overlay van een normale verdeling
+n<-81
+mu<-183
+sd<-36
+observations<-rnorm(n = n,mean = mu,sd = sd)
+hist(observations,probability = TRUE,breaks = 20)
+x<-seq(mu-4*sd,mu+4*sd,length = 200)
+y<-dnorm(x,mu,sd)
+lines(x,y)
+
+```
+
+Boxplot (en filter op juiste kolom [which]):
+```{r}
+boxplot(android$Tijd,ylab="Tijd in ms")
+boxplot(android$Tijd~android$Datahoeveelheid,ylab="Tijd in ms") # 'afhankelijke variabele ~ onafhankelijke variabele'
+greenDAO<-android[which(android$PersistentieType=="GreenDAO"),] #filter
+boxplot(greenDAO$Tijd~greenDAO$Datahoeveelheid)
+```
+
+Mooie normaal curve maken:
+```{r}
+#grote steekproef
+x <- seq(-4,4,length=200)
+y <- dnorm(x)
+plot(x,y,type="l")
+#kleine steekproef maak je gebruik van dt(x,df)!
+# Bepaal de "interessante" x-waarden voor de plot
+x <- seq(from = m-4*s,
+         to = m+4*s, 
+         length.out = 200)
+# Bereken de dichtheidsfunctie
+y <- dnorm(x, m, s)
+```
+
+Voorbeeld POLYGON:
+```{r}
+population_mean <- 2.5
+population_sd <- 1.5
+sd_to_fill <- 1
+lower_bound <- 0.5
+upper_bound <- 4
+x <- seq(-4, 4, length = 1000) * population_sd + population_mean
+y <- dnorm(x, population_mean, population_sd)
+plot(x, y, type="n", xlab = "Waarde", ylab = "Kans", main = "Oefening 3.6", axes = FALSE)
+lines(x, y)
+bounds_filter <- x >= lower_bound & x <= upper_bound
+x_within_bounds <- x[bounds_filter]
+y_within_bounds <- y[bounds_filter]
+x_polygon <- c(lower_bound, x_within_bounds, upper_bound)
+y_polygon <- c(0, y_within_bounds, 0)
+polygon(x_polygon, y_polygon, col = "darkgreen")
+```
+##Hoofdstuk 4: Steekproefonderzoek
+
+Z-Score bepalen:
+```{r} 
+#gegevens zijn willekeurig gekozen, vul in!
+gemiddelde<- 54
+standaardafwijking<-11
+x<-63
+z<-(x-gemiddelde)/standaardafwijking
+z
+```
+
+Kans (p) bepalen (OVERSCHRIJDINGSKANS):
+```{r}
+#voorbeeld: bepaal de kans dat x kleiner is dan 185.
+n<-81
+mu<-183
+sd<-36
+pnorm(q = 185,mean = mu,sd = sd/sqrt(n))
+```
+
+Over een grens bepalen (KRITIEK GEBIED):
+```{r}
+#voorbeeld: bepaal dat 85% minder dan 50 rijdt. (qnorm geeft 49.9 terug, wat minder is dan 50)
+mu<-43.1
+sd<-6.6
+p<-0.85
+qnorm(p = p,mean = mu,sd = sd)
+```
+
+Betrouwbaarheidsinterval:
+```{r}
+sd<-2.45 #gegeven, centrale limietstelling zegt dat je dit moet gebruiken en delen door vierkantswortel(n).
+n<-20
+s<-sd/sqrt(n)#volgt uit de centrale liemietstelling
+a<-0.08 #Geldt voor een betrouwbaarheidsinterval van 92%. (95% gebruiken we dus alpha = 0.05)
+dataset<-c(11.5,16.5,11,17.3,10.8,5.6,13.1,11.5,14.2,12.9,8.7,9.2,15,14.4,10,10.3,18.3,12.9,8.7,14.2)
+mean<-mean(x) 
+t<-qt(p = 1-a/2,df = n-1) #Het is een kleine steekproef (n=20), dus werken we met t ipv z.
+
+links<-mean-t*s #Dit is simpelweg de formule voor betrouwbaarheidsgrenzen te berekenen. 
+rechts<-mean+t*s #bij grote steekproef wordt t = z.
+links
+rechts
+
+```
+
+Gemiddelde / variantie / standaard afwijking met FREQUENTIETABEL:
+```{r}
+inhoud<-c(975,985,995,1005,1015,1025)
+freq<-c(3,5,13,11,5,3)
+n<-sum(freq)
+
+mu<-sum(inhoud*freq)/n
+var<-sum(freq*(inhoud-mu)^2)/n
+sd=sqrt(var)
+
+mu
+var
+sd
+```
+
+Kansverdeling bij fractie (PERCENTAGES):
+```{r}
+n<- 60*24*31 #sample size
+k<- n-1 #number of succeses
+p<- k/n #chance of succes
+q<- 1-p #chance of failure
+
+#Eigenschappen van fracties
+mean<-p
+s<-sqrt(p*q/n)
+
+#Specifieke oefening
+chance<-pnorm(0.99999,mean,s)
+chance
+```
+
+##Hoofdstuk 5: Toetsingsprocedures
+
+Toestingprocedure methode Kritiek grenswaarde:
+```{r}
+#Variabelen moeten heringevuld worden.
+mu<-44
+sd<-6.2
+n<-72
+x<-46.2
+a<-0.025
+s<-sd/sqrt(n)
+#Toestingprocedure (methode Kritieke grensgebied)
+#H0: De verwachtingswaarde voor en na BSA is gelijk.
+#H1: De verwachtingswaarde BSA is groter > geen BSA.
+
+q<-qnorm(p = 1-a,mean = mu,sd = s) #Kritiek grenswaarde bepalen (rechtzijdig)
+
+if(x>q){
+  print("X valt in het kritiek gebied / verwerpingsgebied, dus moeten we de nulhypotese verwerpen.")
+}else{
+  print("X valt in het aanvaardbaar gebied, en mogen we dus de nulhypothese NIET verwerpen")
+}
+```
+
+Toetsingsprocedure Overschrijdingskans:
+```{r}
+mu<-44
+sd<-6.2
+n<-72
+x<-46.2
+a<-0.025
+s<-sd/sqrt(n)
+#Toestingprocedure (methode Kritieke grensgebied)
+#H0: De verwachtingswaarde voor en na BSA is gelijk.
+#H1: De verwachtingswaarde BSA is groter > geen BSA.
+
+p<-1-pnorm(q = x,mean = mu,sd = s) #Overschrijdingskans bepalen (rechtzijdig)
+
+if(p<a){
+  print("De overschrijdingskans (p) is kleiner dan het significantieniveau, en moeten we dus de nulhypothese verwerpen.")
+}else{
+  print("De overschrijdingskans (p) is groter dan het significantieniveau, en mogen we de nulhypothse NIET verwerpen")
+}
+```
+
+Toetsingsprocedure KLEINE STEEKPROEF (kritiek gebied en overschrijdingskans):
+```{r}
+price_diff <- c(400, 500, 350, 200, 400, 
+                250, 500, 250, 300, 500,
+                350, 350, 200, 100)
+
+m0 <- 300  # Hypothetisch populatiegemiddelde (Gekregen)
+alpha <- 0.05
+n <- length(price_diff)
+m <- mean(price_diff)  # steekproefgemiddelde: IN DIT VOORBEELD WERD DIT GETOETST!
+s <- sd(price_diff)    # standaardafwijking van de steekproef
+# Overschrijdingskans p = P(M > m)
+p <- 1 - pt((m - m0) / (s / sqrt(n)), df = n - 1) # m = de waarde die je wilt checken
+
+
+if(p<a){
+    print("H0 verwerpen")
+}else{
+    print("H0 niet verwerpen")
+}
+
+#Kritiek gebied m>g
+t <- qt(1-alpha, df = n - 1)
+g <- m0 + t * (s / sqrt(n))
+t
+if (m > g){
+  print("H0 verwerpen")
+} else {
+  print("H0 niet verwerpen")
+}
+
+#t.test
+t.test(price_diff,mu = m0,alternative = "greater")
+```
+
+##Hoofdstuk 6: Analyse op 2 variabelen
+
+Margins / expected value / chi-kwadraat / cramers V MANUEEL:
+```{r}
+data<-load_file("C:/Users/IndyV/OneDrive/HoGent/2e Jaar Toegepaste Informatica/Onderzoekstechnieken/onderzoekstechnieken-cursus/oefeningen/data/hfst6_2variabelen/MuziekWijn.csv")
+tabel<-table(data)
+#N bepalen
+n<-margin.table(tabel)
+#Alle margins bepalen (RIJ)
+rij1<-margin.table(as.array(tabel[1,]))
+rij2<-margin.table(as.array(tabel[2,]))
+rij3<-margin.table(as.array(tabel[3,]))
+#Alle margins bepalen (KOLOM)
+col1<-margin.table(as.array(tabel[,1]))
+col2<-margin.table(as.array(tabel[,2]))
+col3<-margin.table(as.array(tabel[,3]))
+#Margins in arrays plaatsen zodat we kunnen itereren
+rowMargins<-c(rij1,rij2,rij3)
+colMargins<-c(col1,col2,col3)
+
+#Verwachte waardes bepalen
+expCol1<-rowMargins*colMargins[1]/n
+expCol2<-rowMargins*colMargins[2]/n
+expCol3<-rowMargins*colMargins[3]/n
+
+#alles in 1 array plaatsen volgens kolom
+allExpected<-c(expCol1,expCol2,expCol3)
+allReal<-c(tabel[,1],tabel[,2],tabel[,3])
+
+#manueel chi-kwadraat
+chi<-sum((allReal-allExpected)^2 / allExpected)
+chi
+#manueel cramér's V
+cramer<-sqrt(chi/(n*2)) #2 = kleinste rij/kolom - 1 (3-1=2)
+cramer
+```
+
+Margins / expected value / chi-kwadraat / cramers V BUILT IN:
+```{r}
+data<-load_file("C:/Users/IndyV/OneDrive/HoGent/2e Jaar Toegepaste Informatica/Onderzoekstechnieken/onderzoekstechnieken-cursus/oefeningen/data/hfst6_2variabelen/MuziekWijn.csv")
+tabel<-table(data)
+
+#MARGINS BEPALEN
+margin.table(tabel,margin = 1) #1 bepaalt margins van de rijen
+margin.table(tabel,margin = 2) #2 bepaalt margins van de kolommen
+margin.table(tabel)            #3 bepaalt n, volledig aantal
+
+#Expected values
+chisq.test(tabel)$expected
+
+#Chi-kwadraat
+chisq.test(tabel)$statistic
+
+#Cramér's V
+cramersV(tabel)
+```
+
+Chi-kwadraat functie plotten:
+```{r}
+x <- seq(0,20,length=100)
+hx <- dchisq(x,df=4)
+plot(x,hx, type='l')
+```
+
+Tabel omvormen naar percentages:
+```{r}
+
+data<-load_file("C:/Users/IndyV/OneDrive/HoGent/2e Jaar Toegepaste Informatica/Onderzoekstechnieken/onderzoekstechnieken-cursus/oefeningen/data/hfst6_2variabelen/MuziekWijn.csv")
+tabel<-table(data)
+
+wijnen<-tabel[2,] #Wijnen zonder muziek
+wijnen
+
+prop.table(wijnen)
+barplot(wijnen,ylab = "Percentage")
+```
+
+Frequenties van datums converteren:
+```{r}
+Aardbevingen<-load_file("C:/Users/IndyV/OneDrive/HoGent/2e Jaar Toegepaste Informatica/Onderzoekstechnieken/onderzoekstechnieken-cursus/oefeningen/data/hfst6_2variabelen/Aardbevingen.csv")
+
+strDates <- Aardbevingen$Date 			#alle datums nemen
+dates <- as.Date(strDates, "%m/%d/%Y")  #datums omzetten van dd/mm/yyyy naar yyyy-mm-dd
+freq <- table(format(dates,"%yy-%m"))    #tellen per maand
+r <- as.data.frame(freq) 
+#plot en line
+plot(x = r$Var1,y = r$Freq,type="l",lty=1,xlab="Maand",ylab="Aantal aardbevingen" )
+lines(x = r$Var1,y = r$Freq, pch = 18, col = "blue", type = "b", lty = 1)
+```
+
+Lineaire regressie / correlatie / covariantie / determinantiecoefficient BUILT IN:
+```{r}
+X<-c(10,12,8,13,9,10,7,14,11,6)
+Y<-c(11,14,9,13,9,9,8,14,10,6)
+
+plot(x =X, y = Y)
+#Regressie berekenen en tekenen (constante, dus abline!)
+regressie<-lm(Y~X)  #Y depends on X
+abline(regressie,col="red")
+#correlatie & covariantie. Correlatie moet tussen [-1,1] liggen!
+correlation<-cor(X,Y)
+covariance<-cov(X,Y)
+determinantiecoefficient<-correlation^2 #verklaarde variantie
+```
+
+Lineaire regressie / correlatie / covariantie / determinantiecoefficient MANUEEL:
+```{r}
+X<-c(10,12,8,13,9,10,7,14,11,6)
+Y<-c(11,14,9,13,9,9,8,14,10,6)
+n<-length(X)
+plot(x =X, y = Y)
+#Regressie berekenen en tekenen (constante, dus abline!)
+#lineaire regressie: y = b0 + b1*x
+meanX<-mean(X)
+meanY<-mean(Y)
+b1 = sum((X-meanX)*(Y-meanY))/sum((X-meanX)^2)
+b0 = meanY - b1*meanX
+regressie= b0 + b1*X
+
+lines(X,regressie,col="red")
+
+#Covariantie / correlation / determinantiecoefficient
+covariantie<-sum((X-meanX)*(Y-meanY))/(n-1)
+correlatie<-covariantie/(sd(X)*sd(Y))
+determinantiecoefficient<-correlatie^2
+```
+
+##Hoofdstuk 7: De Chi-kwadraat toets:
+CHI-KWADRAAT toets:overschrijdingskans methode (goodness of fit = p > a => steekproef is representatief aan populatie (H0 = representatief)):
+```{r}
+library(MASS)
+data<-survey
+X<-data$Smoke
+Y<-data$Exer
+tabel<-table(X,Y)
+
+#Toetsing 
+alpha<-0.05
+toets<-chisq.test(tabel)
+chi<-toets$statistic
+p<-toets$p.value
+
+if(p<alpha){
+  print("H0 WEL verwerpen")
+}else{
+  print("H0 NIET verwerpen")
+}
+```
+
+CHI-KWADRAAT toets: kritiek grensgebied methode (goodness of fit = CHIKWADRAAT < g => steekproef is representatief aan populatie (H0 = representatief)):
+```{r}
+library(MASS)
+data<-survey
+
+X<-data$Smoke
+Y<-data$Exer
+tabel<-table(X,Y)
+
+
+a<-0.05
+chi<-chisq.test(tabel)$statistic
+g<-qchisq(p = 1-a,df = 6)
+
+if(chi>g){
+  print("H0 WEL verwerpen");
+}else{
+  print("H0 NIET verwerpen ")
+}
+```
+
+Bepaal gestandaardiseerde residuen voor extreme waarden:
+```{r}
+#Alles groter dan 2 of kleiner dan -2 is EXTREEM!
+data <- chisq.test(Aids2$sex,Aids2$T.categ)
+data$stdres
+```
+
+Bereken verwachte percentage voor de populatie als geheel
+```{r}
+#Hierbij tel je alle aantallen op van de populatie (N), en ieder aantal ga je een voor een delen door N.
+```
+##Hoofdstuk 8: Tijdsreeksen:
+
+Voortschrijdend gemiddelde SMA(Simple Moving Average):
+```{r}
+setwd("C:/Users/IndyV/OneDrive/HoGent/2e Jaar Toegepaste Informatica/Onderzoekstechnieken/onderzoekstechnieken-cursus/oefeningen/data/hfst8_tijdsreeksen")
+passagiers<-read.csv("Passagiers2.csv")
+
+SMA<-SMA(x = passagiers$AirPassengers,n=4)
+plot(SMA)
+```
+
+EMA = Exponential Moving Average
+Enkelvoudig exponentiële afvlakking (EMA):
+```{r}
+library(forecast)
+
+data<-round(rnorm(50,50,10));
+tijdreeks<-ts(data,frequency = 10)
+plot(tijdreeks)
+
+afvlakking<-HoltWinters(tijdreeks,beta=FALSE,gamma=FALSE) #je kan waardes meegeven met beta, alpha, gamma
+plot(afvlakking)
+
+voorspelling<-forecast(afvlakking,5)
+plot(voorspelling)
+```
+
+Dubbel exponentiële afvlakking (trend aanwezig)(EMA):
+```{r}
+library(forecast)
+
+data<-round(rnorm(50,50,10));
+sorted<-sort(data)
+plot(sorted)
+
+kommagetalToevoegen<-rnorm(50,0,2)
+nieuweData<- sorted+kommagetalToevoegen
+
+tijdreeks<-ts(nieuweData,frequency = 10)
+plot(tijdreeks)
+
+afvlakking<-HoltWinters(tijdreeks,alpha=TRUE,beta=TRUE,gamma=FALSE) #je kan waardes meegeven met beta, alpha, gamma
+plot(afvlakking)
+
+voorspelling<-forecast(afvlakking,3)
+voorspelling
+plot(voorspelling)
+```
+
+Driedubbele exponentiële afvlakking (seizoen aanwezig)(EMA):
+```{r}
+library(forecast)
+
+x <- seq(1:50)
+y <- sin(x) #Sinus geeft golven, wat een seizoen nabootst.
+
+kommagetalToevoegen<-rnorm(50,0,0.3)
+y <- y+4+kommagetalToevoegen #grotere schommeling maken
+
+tijdreeks<-ts(y,frequency = 10)
+plot(tijdreeks)
+
+afvlakking<-HoltWinters(tijdreeks) #je kan waardes meegeven met beta, alpha, gamma
+plot(afvlakking)
+
+
+voorspelling<-forecast(afvlakking,30)
+plot(voorspelling)
+```
+
+Autocorrelatie / Autocovariantie (Correlatie vinden in voorspellingsfouten):
+```{r}
+data<-load_file("C:/Users/IndyV/OneDrive/HoGent/2e Jaar Toegepaste Informatica/Onderzoekstechnieken/onderzoekstechnieken-cursus/oefeningen/data/hfst8_tijdsreeksen/Budget.csv")
+tijdreeks<-ts(data$Omzet)
+tijdreeks
+acf(tijdreeks) #Type parameter om ook Autocovariance te gebruiken
+
+```
